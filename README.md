@@ -78,7 +78,7 @@ Handles incoming Telegram messages, checks for existing open tickets, queries th
 ### 2. Knowledge Ingestion
 Processes support knowledge base documents, generates embeddings, and stores them in Supabase for RAG retrieval.
 
-![Knowledge Ingestion](docs/screenshots/knowledge-ingestion-workflow.png)
+![Knowledge Ingestion](https://github.com/ANDRTk/SupportFlow-AI/blob/1a3b4c5a6ccd552a1ed66e4de886ae4c0fd7fdc0/docs/screenshots/knowledge-ingestion.png)
 
 ### 3. Trello Outgoing
 Handles operator replies from Trello comments and sends them back to the Telegram user.
