@@ -83,7 +83,7 @@ Processes support knowledge base documents, generates embeddings, and stores the
 ### 3. Trello Outgoing
 Handles operator replies from Trello comments and sends them back to the Telegram user.
 
-![Trello Outgoing]([docs/screenshots/trello-outgoing-workflow.png](https://github.com/ANDRTk/SupportFlow-AI/blob/a7537d6f22f38f6a7e1194ecf94c352e9649d3cf/docs/screenshots/trello-outgoing.png))
+![Trello Outgoing](https://github.com/ANDRTk/SupportFlow-AI/blob/a7537d6f22f38f6a7e1194ecf94c352e9649d3cf/docs/screenshots/trello-outgoing.png)
 
 
 ## Repository structure
