@@ -73,7 +73,7 @@ Three independent n8n workflows handle different events. **They are intentionall
 ### 1. Telegram Incoming
 Handles incoming Telegram messages, checks for existing open tickets, queries the knowledge base, generates an AI response, and either replies directly or escalates to Trello.
 
-![Telegram Incoming](docs/screenshots/telegram-incoming-workflow.png)
+![Telegram Incoming](https://github.com/ANDRTk/SupportFlow-AI/blob/0db29e27ac0eccd1fe168902a113646a3319ebcd/docs/screenshots/telegram-incoming.png)
 
 ### 2. Knowledge Ingestion
 Processes support knowledge base documents, generates embeddings, and stores them in Supabase for RAG retrieval.
