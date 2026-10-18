@@ -1,0 +1,195 @@
+{
+  "name": "knowledge-ingestion",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Upload Your Knowledge Base",
+        "formDescription": "Upload a PDF document to build the knowledge base. Maximum size: 10 MB.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Upload Documents",
+              "fieldType": "file",
+              "acceptFileTypes": ".pdf"
+            }
+          ]
+        },
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "82af6c8a-e515-41b1-a933-aa7a590e3a93",
+      "name": "Upload Knowledge Base Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "position": [
+        96,
+        208
+      ],
+      "typeVersion": 2.5
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "=Upload_Documents",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        320,
+        208
+      ],
+      "id": "8c392e6e-607d-4b8d-a8e1-f36bb5bdd8af",
+      "name": "Extract from File"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst text = $input.first().json.text;\n\nif (!text || !text.trim()) {\n  throw new Error(\"Document text is empty\");\n}\n\nconst lines = text\n  .split(/\\r?\\n/)\n  .map(line => line.trim())\n  .filter(Boolean);\n\nconst documentTitle = lines[0];\nconst chunks = [];\n\nlet heading = null;\nlet paragraphs = [];\n\nfunction saveChunk() {\n  if (!heading || paragraphs.length === 0) return;\n\n  chunks.push({\n    title: heading,\n    content: heading + \"\\n\" + paragraphs.join(\" \")\n  });\n}\n\nfor (const line of lines.slice(1)) {\n\n  // Пропускаємо службову позначку документа\n  if (/^SYNTHETIC DEMO DOCUMENT/i.test(line)) {\n    continue;\n  }\n\n  // Тестові запитання не є корпоративними правилами\n  if (/^Test questions:/i.test(line)) {\n    break;\n  }\n\n  // Виявляємо короткі тематичні заголовки\n  const isHeading =\n    /^[A-Z][a-z]/.test(line) &&\n    line.length < 65 &&\n    line.split(/\\s+/).length <= 8 &&\n    !/[.!?:;]$/.test(line);\n\n  if (isHeading) {\n    saveChunk();\n    heading = line;\n    paragraphs = [];\n  } else if (heading) {\n    paragraphs.push(line);\n  }\n}\n\nsaveChunk();\n\nreturn chunks.map((chunk, index) => ({\n  json: {\n    source: documentTitle,\n    chunk_index: index,\n    title: chunk.title,\n    content: chunk.content,\n    character_count: chunk.content.length\n  }\n}));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        528,
+        208
+      ],
+      "id": "0b43bbec-5202-4099-8922-073626da7c4c",
+      "name": "Split Document into Chunks"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=\n{{\n  JSON.stringify({\n    model: \"models/gemini-embedding-001\",\n    content: {\n      parts: [\n        {\n          text: $json.content\n        }\n      ]\n    },\n    taskType: \"RETRIEVAL_DOCUMENT\",\n    title: $json.title,\n    outputDimensionality: 768\n  })\n}}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        832,
+        176
+      ],
+      "id": "b35a575c-e109-45f4-af63-4ff2c16cb392",
+      "name": "Generate Embeddings"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst chunks = $('Split Document into Chunks')\n  .all()\n  .map(item => item.json);\n\nconst embeddings = $input.all()\n  .map(item => item.json);\n\n// Перевіряємо кількість фрагментів і векторів\nif (chunks.length !== embeddings.length) {\n  throw new Error(\"Chunks and embeddings count mismatch\");\n}\n\nreturn chunks.map((chunk, index) => {\n\n  const vector = embeddings[index].embedding.values;\n\n  // Перевіряємо розмірність вектора\n  \nif (!Array.isArray(vector)) {\n  throw new Error(`Embedding ${index} is not an array`);\n}\n\nif (vector.length !== 768) {\n  throw new Error(\n    `Embedding ${index}: expected 768, received ${vector.length}`\n  );\n}\n\n\n  return {\n    json: {\n      source_id: `fitlife-${chunk.chunk_index}`,\n      title: chunk.title,\n      content: chunk.content,\n      chunk_index: chunk.chunk_index,\n      embedding: vector,\n      dimensions: vector.length\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1056,
+        176
+      ],
+      "id": "a9d985d0-3d32-4a6f-8160-4c47da929b32",
+      "name": "Prepare Vector Records"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_PROJECT_REF.supabase.co/rest/v1/knowledge_chunks",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "on_conflict",
+              "value": "source_id"
+            },
+            {
+              "name": "select",
+              "value": "id,source_id,title,chunk_index"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=\n{{\n  JSON.stringify({\n    source_id: $json.source_id,\n    title: $json.title,\n    content: $json.content,\n    chunk_index: $json.chunk_index,\n    embedding: $json.embedding\n  })\n}}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1296,
+        176
+      ],
+      "id": "5794162a-d3fd-4441-9ac1-b69fd959e0a8",
+      "name": "Save Embeddings to Supabase"
+    }
+  ],
+  "connections": {
+    "Upload Knowledge Base Form": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Split Document into Chunks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Document into Chunks": {
+      "main": [
+        [
+          {
+            "node": "Generate Embeddings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Embeddings": {
+      "main": [
+        [
+          {
+            "node": "Prepare Vector Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Vector Records": {
+      "main": [
+        [
+          {
+            "node": "Save Embeddings to Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}

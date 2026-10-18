@@ -1,0 +1,459 @@
+{
+  "name": "SupportFlow - Trello Outgoing",
+  "nodes": [
+    {
+      "parameters": {
+        "multipleMethods": true,
+        "httpMethod": [
+          "POST",
+          "HEAD"
+        ],
+        "path": "trello-replies",
+        "options": {
+          "rawBody": true,
+          "responseCode": {
+            "values": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        -256
+      ],
+      "id": "7cf4bcc6-da1d-479e-b067-3c0e2156f7d6",
+      "name": "Webhook"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "be801cc4-b18d-4ec9-9ffa-62d612734dce",
+              "leftValue": "={{ $json.action?.data?.text ?? '' }}",
+              "rightValue": "/reply ",
+              "operator": {
+                "type": "string",
+                "operation": "startsWith"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        896,
+        -256
+      ],
+      "id": "9b0e11ff-b422-452e-9a4a-2fcb9c5858bb",
+      "name": "Is Operator Reply?"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst item = $input.first();\n\n// 1. Отримуємо оригінальні байти HTTP Body\nconst buffer = await this.helpers.getBinaryDataBuffer(0, 'data');\n\nconst rawBody = buffer.toString('utf8');\n\n// 2. Точний URL, зареєстрований у Trello\nconst callbackURL =\n  'https://YOUR_N8N_HOST/webhook/trello-replies';\n\n// 3. Отримуємо підпис, який надіслав Trello\nconst receivedSignature =\n  item.json.headers?.['x-trello-webhook'] ?? '';\n\n// 4. Готуємо дані для HMAC-SHA1\nconst signatureInput = rawBody + callbackURL;\n\n// 5. Розбираємо JSON для наступних нод\nconst payload = JSON.parse(rawBody);\n\nreturn [\n  {\n    json: {\n      signature_input: signatureInput,\n      received_signature: receivedSignature,\n      action: payload.action,\n      model: payload.model\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        -256
+      ],
+      "id": "7004eb12-e45a-497d-a8fe-17e7512afde5",
+      "name": "Prepare Trello Signature"
+    },
+    {
+      "parameters": {
+        "action": "hmac",
+        "type": "SHA1",
+        "value": "={{ $json.signature_input }}",
+        "dataPropertyName": "calculated_signature",
+        "encoding": "base64"
+      },
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 2,
+      "position": [
+        448,
+        -256
+      ],
+      "id": "bad7e057-9123-42e8-b8f7-b38b2a7ade37",
+      "name": "Calculate Trello Signature"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "0aa7993a-36ff-4921-8a46-1c1325ecda80",
+              "leftValue": "={{ $json.calculated_signature }}",
+              "rightValue": "={{ $('Prepare Trello Signature').first().json.received_signature }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        -256
+      ],
+      "id": "72ec7326-ebda-4841-9810-192271ad44e2",
+      "name": "Signature Valid?"
+    },
+    {
+      "parameters": {
+        "url": "https://YOUR_PROJECT_REF.supabase.co/rest/v1/support_tickets",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "trello_card_id",
+              "value": "={{ 'eq.' + $json.action.data.idCard }}"
+            },
+            {
+              "name": "status",
+              "value": "eq.open"
+            },
+            {
+              "name": "select",
+              "value": "id,chat_id,trello_card_id,status"
+            },
+            {
+              "name": "limit",
+              "value": "1"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1120,
+        -352
+      ],
+      "id": "40ea57a5-9fa6-4b4b-8504-dc2eb3bfe560",
+      "name": "Get Ticket Mapping"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://YOUR_PROJECT_REF.supabase.co/rest/v1/trello_reply_events",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "resolution=ignore-duplicates,return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=\n{{\n  JSON.stringify({\n    action_id: $('Prepare Trello Signature').first().json.action.id,\n    trello_card_id: $json.trello_card_id,\n    chat_id: $json.chat_id,\n    status: \"pending\"\n  })\n}}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1344,
+        -352
+      ],
+      "id": "825a0981-36f3-459b-9c4d-cba8b5fb48a5",
+      "name": "Claim Trello Event",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/botYOUR_TELEGRAM_BOT_TOKEN/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=\n{{\n  JSON.stringify({\n    chat_id: $json.chat_id,\n\n    text: $('Prepare Trello Signature')\n      .first()\n      .json.action.data.text\n      .slice(6)\n      .trim()\n  })\n}}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1568,
+        -352
+      ],
+      "id": "10b7b141-dd49-4f5e-9c06-5429953ef8ed",
+      "name": "Send Operator Reply"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://YOUR_PROJECT_REF.supabase.co/rest/v1/trello_reply_events",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "action_id",
+              "value": "={{ 'eq.' + $('Prepare Trello Signature').first().json.action.id }}"
+            },
+            {
+              "name": "status",
+              "value": "eq.pending"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=\n{{\n  JSON.stringify({\n    status: \"sent\",\n\n    sent_at: new Date().toISOString(),\n\n    telegram_message_id: $json.result.message_id\n  })\n}}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1792,
+        -352
+      ],
+      "id": "fb9cfb2e-5a92-4ab3-b9ad-0b51918f0ad5",
+      "name": "Update Event Status"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "961d2787-6758-484a-8b60-8d566b16cb20",
+              "leftValue": "={{ $json.action.display.entities }}",
+              "rightValue": "",
+              "operator": {
+                "type": "object",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "703ee8b5-21ce-4dbf-8f04-3fb6bbd9d585",
+              "leftValue": "={{ $json.action.data.listBefore.id }}",
+              "rightValue": "YOUR_TRELLO_DONE_LIST_ID",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            },
+            {
+              "id": "8a4ecb61-4ff1-46a4-8355-0d9314eb087e",
+              "leftValue": "={{ $json.action.display.entities.listAfter.id }}",
+              "rightValue": "YOUR_TRELLO_DONE_LIST_ID",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1120,
+        -160
+      ],
+      "id": "ac90c8da-be4c-439d-b138-4e341690a21d",
+      "name": "Is Ticket Resolved?"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://YOUR_PROJECT_REF.supabase.co/rest/v1/support_tickets",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "trello_card_id",
+              "value": "={{ 'eq.' + $json.action.data.card.id }}"
+            },
+            {
+              "name": "status",
+              "value": "eq.open"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=\n{{\n  JSON.stringify({\n    status: \"closed\",\n    closed_at: new Date().toISOString()\n  })\n}}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1392,
+        -208
+      ],
+      "id": "744892db-005d-4faf-8170-99b8489e17d9",
+      "name": "HTTP Request"
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Prepare Trello Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Operator Reply?": {
+      "main": [
+        [
+          {
+            "node": "Get Ticket Mapping",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Ticket Resolved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Trello Signature": {
+      "main": [
+        [
+          {
+            "node": "Calculate Trello Signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Trello Signature": {
+      "main": [
+        [
+          {
+            "node": "Signature Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signature Valid?": {
+      "main": [
+        [
+          {
+            "node": "Is Operator Reply?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Ticket Mapping": {
+      "main": [
+        [
+          {
+            "node": "Claim Trello Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claim Trello Event": {
+      "main": [
+        [
+          {
+            "node": "Send Operator Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Operator Reply": {
+      "main": [
+        [
+          {
+            "node": "Update Event Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Ticket Resolved?": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  }
+}

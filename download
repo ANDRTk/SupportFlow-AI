@@ -1,0 +1,16 @@
+# Local credentials, environment files, and unsanitized exports
+.env
+.env.*
+!.env.example
+*.secret
+*.secrets
+secrets/
+exports/
+*-private.json
+*-raw.json
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
