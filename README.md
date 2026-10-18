@@ -118,6 +118,3 @@ SupportFlow-AI/
 - `trello_reply_events` — tracking of outgoing operator replies and protection from duplicate Trello events.
 
 The vector search function `match_knowledge_chunks` returns the most similar document sections. See [`database/schema.sql`](database/schema.sql) for a minimal reproducible reference schema.
-## Security notes
-
-The committed workflow exports are sanitized: no live Telegram bot token, Supabase URL tied to a personal project, pinned execution data, or n8n credential references. Nevertheless, **review exports before every public commit**. Use n8n's credential manager for API secrets. If a Telegram token was ever embedded in an older export, revoke and regenerate it before publishing.
