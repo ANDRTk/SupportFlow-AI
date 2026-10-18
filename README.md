@@ -118,18 +118,6 @@ SupportFlow-AI/
 - `trello_reply_events` — tracking of outgoing operator replies and protection from duplicate Trello events.
 
 The vector search function `match_knowledge_chunks` returns the most similar document sections. See [`database/schema.sql`](database/schema.sql) for a minimal reproducible reference schema.
-
-## Scope and limitations
-
-This project is intentionally an **MVP for learning and demonstration**, not a production-ready help desk. In particular:
-
-- The included sample knowledge base and company are fictional.
-- The document splitter is tailored to the sample PDF's headings; it is not a general-purpose multi-format ingestion pipeline.
-- The Telegram channel handles text messages; media and attachments are outside the MVP scope.
-- Delivery retries, stuck-event recovery, monitoring, and automatic ticket reopening are not implemented.
-- Basic action-ID deduplication reduces repeated Trello replies but cannot guarantee exactly-once Telegram delivery during failures.
-- Imported workflows must be configured for the new n8n/Trello/Supabase environment before they can run.
-
 ## Security notes
 
 The committed workflow exports are sanitized: no live Telegram bot token, Supabase URL tied to a personal project, pinned execution data, or n8n credential references. Nevertheless, **review exports before every public commit**. Use n8n's credential manager for API secrets. If a Telegram token was ever embedded in an older export, revoke and regenerate it before publishing.
