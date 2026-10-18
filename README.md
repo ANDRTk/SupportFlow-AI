@@ -68,6 +68,24 @@ Three independent n8n workflows handle different events. **They are intentionall
 | Human support ticket board | Trello REST API and webhooks |
 | Data transformations | JavaScript in n8n Code nodes |
 
+## n8n Workflows
+
+### 1. Telegram Incoming
+Handles incoming Telegram messages, checks for existing open tickets, queries the knowledge base, generates an AI response, and either replies directly or escalates to Trello.
+
+![Telegram Incoming](docs/screenshots/telegram-incoming-workflow.png)
+
+### 2. Knowledge Ingestion
+Processes support knowledge base documents, generates embeddings, and stores them in Supabase for RAG retrieval.
+
+![Knowledge Ingestion](docs/screenshots/knowledge-ingestion-workflow.png)
+
+### 3. Trello Outgoing
+Handles operator replies from Trello comments and sends them back to the Telegram user.
+
+![Trello Outgoing](docs/screenshots/trello-outgoing-workflow.png)
+
+
 ## Repository structure
 
 ```text
